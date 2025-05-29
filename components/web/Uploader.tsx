@@ -6,10 +6,12 @@ import { Button } from "../ui/button";
 import { FileRejection, useDropzone } from "react-dropzone";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 
 export function Uploader() {
   const [files, setFiles] = useState<
     Array<{
+      id: string;
       file: File;
       uploading: boolean;
       progress: number;
@@ -140,6 +142,7 @@ export function Uploader() {
       setFiles((prevFiles) => [
         ...prevFiles,
         ...acceptedFiles.map((file) => ({
+          id: uuidv4(),
           file,
           uploading: false,
           progress: 0,
@@ -209,9 +212,9 @@ export function Uploader() {
       {files.length > 0 && (
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
           {files.map(
-            ({ file, uploading, progress, key, isDeleting, error }) => {
+            ({ id, file, uploading, progress, key, isDeleting, error }) => {
               return (
-                <div key={key}>
+                <div key={id}>
                   <h1>image</h1>
                   <p>{progress}</p>
                 </div>
