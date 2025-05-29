@@ -1,18 +1,13 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
-import { FileRejection, useDropzone } from "react-dropzone";
-import { toast } from "sonner";
-import { Button } from "../ui/button";
-import { Loader2 } from "lucide-react";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "../ui/card";
-import { CircularProgress } from "./UploadProgress";
-import { Trash2 } from "lucide-react";
-import PlaceholderImage from "@/public/placeholder.jpg";
+import { Button } from "../ui/button";
+import { FileRejection, useDropzone } from "react-dropzone";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
-export function Dropzone() {
+export function Uploader() {
   const [files, setFiles] = useState<
     Array<{
       file: File;
@@ -20,6 +15,7 @@ export function Dropzone() {
       progress: number;
       key?: string;
       isDeleting: boolean;
+      error: boolean;
     }>
   >([]);
 
@@ -36,15 +32,15 @@ export function Dropzone() {
 
     if (!response.ok) {
       toast.error("Failed to remove file from storage.");
+      setFiles((prevFiles) =>
+        prevFiles.map((f) =>
+          f.key === fileId ? { ...f, isDeleting: false, error: true } : f
+        )
+      );
       return;
     }
 
-    setFiles((prevFiles) =>
-      prevFiles.map((f) => (f.key === fileId ? { ...f, isDeleting: false } : f))
-    );
-
     setFiles((prevFiles) => prevFiles.filter((f) => f.key !== fileId));
-
     toast.success("File removed successfully");
   }
 
@@ -66,7 +62,17 @@ export function Dropzone() {
       });
 
       if (!presignedResponse.ok) {
-        throw new Error("Failed to get presigned URL");
+        toast.error("Failed to get presigned URL");
+
+        setFiles((prevFiles) =>
+          prevFiles.map((f) =>
+            f.file === file
+              ? { ...f, uploading: false, progress: 0, error: true }
+              : f
+          )
+        );
+
+        return;
       }
 
       const { presignedUrl, key } = await presignedResponse.json();
@@ -94,7 +100,9 @@ export function Dropzone() {
             // 3. File fully uploaded - set progress to 100
             setFiles((prevFiles) =>
               prevFiles.map((f) =>
-                f.file === file ? { ...f, progress: 100, uploading: false } : f
+                f.file === file
+                  ? { ...f, progress: 100, uploading: false, error: false }
+                  : f
               )
             );
 
@@ -114,11 +122,14 @@ export function Dropzone() {
         xhr.setRequestHeader("Content-Type", file.type);
         xhr.send(file);
       });
-    } catch (error) {
+    } catch {
       toast.error("Something went wrong");
+
       setFiles((prevFiles) =>
         prevFiles.map((f) =>
-          f.file === file ? { ...f, uploading: false, progress: 0 } : f
+          f.file === file
+            ? { ...f, uploading: false, progress: 0, error: true }
+            : f
         )
       );
     }
@@ -133,6 +144,7 @@ export function Dropzone() {
           uploading: false,
           progress: 0,
           isDeleting: false,
+          error: false,
         })),
       ]);
 
@@ -159,6 +171,7 @@ export function Dropzone() {
       }
     }
   }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     onDropRejected: rejectedFiles,
@@ -193,46 +206,20 @@ export function Dropzone() {
         </CardContent>
       </Card>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
-        {files.map(({ file, uploading, progress, key, isDeleting }) => (
-          <div key={file.name} className="relative w-full group">
-            <div className="relative">
-              <Image
-                src={URL.createObjectURL(file)}
-                alt={file.name}
-                width={200}
-                height={200}
-                className={cn(
-                  uploading ? "opacity-50" : "",
-                  "rounded-lg object-cover size-32"
-                )}
-              />
-
-              {uploading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <CircularProgress progress={progress} />
+      {files.length > 0 && (
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
+          {files.map(
+            ({ file, uploading, progress, key, isDeleting, error }) => {
+              return (
+                <div key={key}>
+                  <h1>image</h1>
+                  <p>{progress}</p>
                 </div>
-              )}
-            </div>
-
-            <Button
-              className="absolute top-2 right-2"
-              variant="destructive"
-              size="icon"
-              onClick={() => removeFile(key!)}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-            </Button>
-
-            <p className="mt-2 text-sm truncate">{file.name}</p>
-          </div>
-        ))}
-      </div>
+              );
+            }
+          )}
+        </div>
+      )}
     </>
   );
 }
