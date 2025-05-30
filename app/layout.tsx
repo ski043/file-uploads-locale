@@ -40,7 +40,7 @@ export default function RootLayout({
             <ThemeToggle />
           </div>
           {children}
-          <Toaster richColors closeButton theme="light" />
+          <Toaster richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

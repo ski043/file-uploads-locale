@@ -4,9 +4,10 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { FileRejection, useDropzone } from "react-dropzone";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
+import { Loader2, Trash2 } from "lucide-react";
 
 export function Uploader() {
   const [files, setFiles] = useState<
@@ -18,32 +19,49 @@ export function Uploader() {
       key?: string;
       isDeleting: boolean;
       error: boolean;
+      objectUrl?: string;
     }>
   >([]);
 
   async function removeFile(fileId: string) {
-    setFiles((prevFiles) =>
-      prevFiles.map((f) => (f.key === fileId ? { ...f, isDeleting: true } : f))
-    );
+    try {
+      const fileToRemove = files.find((f) => f.id === fileId);
+      if (fileToRemove) {
+        if (fileToRemove.objectUrl) {
+          URL.revokeObjectURL(fileToRemove.objectUrl);
+        }
+      }
 
-    const response = await fetch("/api/s3/delete", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: fileId }),
-    });
+      setFiles((prevFiles) =>
+        prevFiles.map((f) => (f.id === fileId ? { ...f, isDeleting: true } : f))
+      );
 
-    if (!response.ok) {
+      const response = await fetch("/api/s3/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: fileToRemove?.key }),
+      });
+
+      if (!response.ok) {
+        toast.error("Failed to remove file from storage.");
+        setFiles((prevFiles) =>
+          prevFiles.map((f) =>
+            f.id === fileId ? { ...f, isDeleting: false, error: true } : f
+          )
+        );
+        return;
+      }
+
+      setFiles((prevFiles) => prevFiles.filter((f) => f.id !== fileId));
+      toast.success("File removed successfully");
+    } catch (error) {
       toast.error("Failed to remove file from storage.");
       setFiles((prevFiles) =>
         prevFiles.map((f) =>
-          f.key === fileId ? { ...f, isDeleting: false, error: true } : f
+          f.id === fileId ? { ...f, isDeleting: false, error: true } : f
         )
       );
-      return;
     }
-
-    setFiles((prevFiles) => prevFiles.filter((f) => f.key !== fileId));
-    toast.success("File removed successfully");
   }
 
   const uploadFile = async (file: File) => {
@@ -148,6 +166,7 @@ export function Uploader() {
           progress: 0,
           isDeleting: false,
           error: false,
+          objectUrl: URL.createObjectURL(file),
         })),
       ]);
 
@@ -185,6 +204,17 @@ export function Uploader() {
     },
   });
 
+  useEffect(() => {
+    return () => {
+      // Cleanup object URLs when component unmounts
+      files.forEach((file) => {
+        if (file.objectUrl) {
+          +URL.revokeObjectURL(file.objectUrl);
+        }
+      });
+    };
+  }, [files]);
+
   return (
     <>
       <Card
@@ -212,11 +242,53 @@ export function Uploader() {
       {files.length > 0 && (
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
           {files.map(
-            ({ id, file, uploading, progress, key, isDeleting, error }) => {
+            ({
+              id,
+              file,
+              uploading,
+              progress,
+              isDeleting,
+              error,
+              objectUrl,
+            }) => {
               return (
-                <div key={id}>
-                  <h1>image</h1>
-                  <p>{progress}</p>
+                <div key={id} className="flex flex-col gap-1">
+                  <div className="relative aspect-square rounded-lg overflow-hidden">
+                    <img
+                      src={objectUrl}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                    />
+
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={() => removeFile(id)}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
+                    {uploading && !isDeleting && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="text-white font-medium text-lg">
+                          {progress}%
+                        </div>
+                      </div>
+                    )}
+                    {error && (
+                      <div className="absolute inset-0 bg-red-500/50 flex items-center justify-center">
+                        <div className="text-white font-medium">Error</div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate px-1">
+                    {file.name}
+                  </p>
                 </div>
               );
             }
